@@ -3,6 +3,7 @@ from datetime import timezone, timedelta
 
 
 project_dir = Path(__file__).resolve().parent
+images_dir = project_dir / 'images_dir'
 
 
 def read_secrets(filename=project_dir / 'secrets.txt'):
