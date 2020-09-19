@@ -3,12 +3,13 @@ from pathlib import Path
 
 import requests
 import matplotlib.pyplot as plt
+import imageio
 
 from utils import lon, lat, token_owm
 
 
 class WeatherForecast:
-    def __init__(self, latitude, longitude, appid, pattern='%d-%m-%Y %H:%M:%S'):
+    def __init__(self, latitude, longitude, appid, pattern='%d-%m-%Y %H:%M:%S', num_hours=48):
         self.weather_forecast = None
 
         self.latitude = latitude
@@ -16,11 +17,13 @@ class WeatherForecast:
         self.appid = appid
         self.units = 'metric'
         self.pattern = pattern
+        self.num_hours = num_hours
 
         self.params = {'lat': self.latitude,
                        'lon': self.longitude,
                        'appid': self.appid,
-                       'units': self.units}
+                       'units': self.units,
+                       'lang': 'ru'}
 
         self.timezone = None
 
@@ -47,13 +50,15 @@ class WeatherForecast:
             forecast_list = [self.weather_forecast['current']]
         elif type_forecast == 'hourly':
             forecast_list = self.weather_forecast['hourly']
+            self.num_hours = min(len(forecast_list), self.num_hours)
+            forecast_list = forecast_list[:self.num_hours]
         else:
             raise NotImplementedError('No implemented type forecast')
 
         responses_list = []
         for forecast in forecast_list:
             response = {'time': self.convert_timestamp2datetime(forecast['dt'])}
-            fields = ['temp', 'pressure', 'humidity', 'wind_speed']
+            fields = ['temp', 'pressure', 'humidity', 'wind_speed', 'weather']
             response.update({k: forecast[k] for k in fields})
             responses_list.append(response)
         return responses_list
@@ -64,11 +69,27 @@ class WeatherForecast:
     def get_hourly_forecast(self):
         return self._get_current_or_hourly_forecast('hourly')
 
+    def get_fig_full_day_forecast(self):
+        last_num_hours = self.num_hours
+        self.num_hours = 24
+        forecast_list = self.get_hourly_forecast()
+        self.num_hours = last_num_hours
+
+        forecast_list = forecast_list[:self.num_hours:3]
+        print(forecast_list)
+        timestamp_list = [forecast['time'] for forecast in forecast_list]
+        icon_list = [download_icon_weather(forecast['weather'][0]['icon']) for forecast in forecast_list]
+        temp_list = [forecast['temp'] for forecast in forecast_list]
+        wind_list = [forecast['temp'] for forecast in forecast_list]
+
+        print([icon.shape for icon in icon_list])
+
+
     def get_fig_hourly_temp(self, path_to_save=None):
         hourly = self.get_hourly_forecast()
         temps = [int(forecast['temp']) for forecast in hourly]
         timestamps = [forecast['time'] for forecast in hourly]
-        fig = visual_graphs(temps, timestamps, 'Temperature', 'Hourly Forecast 48 hours')
+        fig = visual_graphs(temps, timestamps, 'Temperature', f'Hourly Forecast {self.num_hours} hours')
         if path_to_save:
             path_to_save = Path(path_to_save)
             path_to_save.parent.mkdir(parents=True, exist_ok=True)
@@ -108,11 +129,24 @@ def visual_graphs(values, timestamps, ylabel, title) -> None:
     return fig
 
 
+def download_icon_weather(icon_id, scale=2):
+    assert scale in [1, 2, 3, 4]
+    url = f'http://openweathermap.org/img/wn/{icon_id}@{scale}x.png'
+    icon = imageio.imread(url)
+    return icon
+
+
 if __name__ == "__main__":
-    pacan = WeatherForecast(lat, lon, token_owm, '%H:%M %d-%m')
-    curr = pacan.get_current_forecast()
-    hourly = pacan.get_hourly_forecast()
-    pacan.get_fig_hourly_temp('/home/daloro/Desktop/zalupa.png').show()
+    pacan = WeatherForecast(lat, lon, token_owm, '%H:%M %d-%m', 24)
+    # curr = pacan.get_current_forecast()
+    # hourly = pacan.get_hourly_forecast()
+    # pacan.get_fig_hourly_temp('/home/daloro/Desktop/zalupa.png').show()
+    # weather_forecast = pacan.weather_forecast
+    # print(weather_forecast['hourly'][0]['weather'])
+    # icon = download_icon_weather(weather_forecast['hourly'][0]['weather'][0]['icon'])
+    # plt.imshow(icon)
+    # plt.show()
+    pacan.get_fig_full_day_forecast()
 
 
 
